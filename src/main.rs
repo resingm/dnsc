@@ -2,10 +2,13 @@ use std::io::{self, BufRead};
 use std::net::UdpSocket;
 use std::sync::mpsc;
 use std::thread;
+use std::time::Duration;
 
+use clap::Parser;
+
+pub mod cli;
 pub mod dns;
 
-// use crate::dns;
 
 enum Message {
     Input(String),
@@ -42,9 +45,11 @@ fn read_input(channel: mpsc::Sender<Message>) {
 fn run_dns_query_tx(
     channel: mpsc::Receiver<Message>,
     socket: UdpSocket,
+    nameserver: &str,
+    nameserver_port: u16,
     // q_channel: mpsc::Sender<u16>,
 ) {
-    let resolver_addr = ("8.8.8.8", 53);
+    let resolver_addr = (nameserver, nameserver_port);
     // TODO: Start with a random query ID
     let mut qid: u16 = 0;
     // TODO: Increment query ID with every new query.
@@ -75,26 +80,25 @@ fn run_dns_query_tx(
 /// TODO: Add some description
 fn run_dns_query_rx(
     socket: UdpSocket,
+    timeout: u64,
     // q_channel: mpsc::Receiver<u16>,
 ) {
     let mut buffer = [0; 4096];
+    socket.set_read_timeout(
+        Some(Duration::new(timeout, 0))
+    ).expect("Failed to set timeout on the DNS receiver socket.");
 
     loop {
         match socket.recv_from(&mut buffer) {
+
             Ok((received, src_addr)) => {
                 // Process the received DNS query
                 let response_data = &buffer[..received];
-
                 let r = dns::parse_query(response_data).expect("Failed to parse a DNS response.");
-                dns::response_to_csv(r);
-
-                // for r
-                // println!("Parsed query from {}: {:?}", src_addr, r);
-                // println!("Received DNS query from {}: ", src_addr);
-                // for b in query_data {
-                //     print!("{:02x} ", b);
-                // }
-                // println!("");
+                dns::response_to_csv(src_addr, r);
+            }
+            Err(err) if err.kind() == io::ErrorKind::WouldBlock => {
+                break;
             }
             Err(err) => {
                 // Handle the receive error
@@ -107,11 +111,19 @@ fn run_dns_query_rx(
 
 
 fn main() {
+    // Parse args
+    let args = cli::ArgParse::parse();
+
+    let ns= args.nameserver;
+    let ns_port = args.port;
+    let timeout = args.timeout;
+    let bind = format!("{}:0", args.bind);
 
     let (tx, rx) = mpsc::channel();
     // let (q_tx, q_rx) = mpsc::channel();
 
-    let socket = UdpSocket::bind("0.0.0.0:53535").expect("Failed to bind UDP socket.");
+    // The 0.0.0.0:0 binds to an ephemeral port
+    let socket = UdpSocket::bind(bind).expect("Failed to bind UDP socket.");
     let socket_tx = socket.try_clone().expect("Failed to clone UDP socket for lookup thread.");
     let socket_rx = socket.try_clone().expect("Failed to clone UDP socket for listener thread.");
 
@@ -123,12 +135,12 @@ fn main() {
 
     let thread_dns_query_tx= thread::spawn(move || {
         // run_dns_query_tx(rx, socket_tx, q_tx);
-        run_dns_query_tx(rx, socket_tx);
+        run_dns_query_tx(rx, socket_tx, &ns, ns_port);
     });
 
     let thread_dns_query_rx = thread::spawn(move || {
         // run_dns_query_rx(socket, q_rx);
-        run_dns_query_rx(socket_rx);
+        run_dns_query_rx(socket_rx, timeout);
     });
 
     thread_input_reader.join().expect("Failed to terminate input reader.");

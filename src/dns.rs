@@ -1,4 +1,6 @@
 
+use std::net::SocketAddr;
+
 use trust_dns_proto::{error, op, rr};
 
 
@@ -65,11 +67,13 @@ pub fn parse_query(buf: &[u8]) -> error::ProtoResult<op::Message> {
     // edns: None
 // }
 
-pub fn response_to_csv(r: op::Message) {
+pub fn response_to_csv(src_addr: SocketAddr, r: op::Message) {
     if r.response_code() == op::ResponseCode::NoError {
         for answer in r.answers() {
             println!(
-                "{},{},{},{},{}",
+                "{},{},{},{},{},{},{}",
+                src_addr.ip().to_string(),
+                src_addr.port().to_string(),
                 answer.name(),
                 answer.rr_type(),
                 answer.dns_class(),
