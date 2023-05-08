@@ -46,7 +46,7 @@ fn read_input(channel: mpsc::Sender<Message>) {
 
 
 /// TODO: Documentation
-fn lookup_domain_names(channel: mpsc::Receiver<Message>, socket: UdpSocket) {
+fn run_dns_query_tx(channel: mpsc::Receiver<Message>, socket: UdpSocket) {
 
     // let resolver_config = 
     // let dnsq = trust_dns_proto::op::Message::query()
@@ -74,6 +74,12 @@ fn lookup_domain_names(channel: mpsc::Receiver<Message>, socket: UdpSocket) {
 }
 
 
+/// TODO: Add some description
+fn run_dns_query_rx(socket: UdpSocket) {
+
+}
+
+
 fn main() {
 
     let (tx, rx) = mpsc::channel();
@@ -84,15 +90,19 @@ fn main() {
 
     // Spawn the DNS query consumer
 
-    let stdin_reader_thread = thread::spawn(move || {
+    let thread_input_reader= thread::spawn(move || {
         read_input(tx);
     });
 
-    let lookup_domain_names_thread = thread::spawn(move || {
-        lookup_domain_names(rx, socket_tx);
+    let thread_dns_query_tx= thread::spawn(move || {
+        run_dns_query_tx(rx, socket_tx);
+    });
+
+    let thread_dns_query_rx = thread::spawn(move || {
 
     });
 
-    stdin_reader_thread.join().expect("Failed to terminate input reader.");
-    lookup_domain_names_thread.join().expect("Failed to terminate domain name lookup.");
+    thread_input_reader.join().expect("Failed to terminate input reader.");
+    thread_dns_query_tx.join().expect("Failed to terminate DNS query sender.");
+    thread_dns_query_rx.join().expect("Failed to terminate DNS query receiver.");
 }
