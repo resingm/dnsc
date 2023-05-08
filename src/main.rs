@@ -47,12 +47,20 @@ fn run_dns_query_tx(
     socket: UdpSocket,
     nameserver: &str,
     nameserver_port: u16,
+    rate_limit: u64,
     // q_channel: mpsc::Sender<u16>,
 ) {
     let resolver_addr = (nameserver, nameserver_port);
     // TODO: Start with a random query ID
     let mut qid: u16 = 0;
-    // TODO: Increment query ID with every new query.
+
+    let wait_time = if rate_limit > 0 {
+        (Duration::new(1, 0).as_millis() / rate_limit as u128) as u64
+    } else {
+        0
+    };
+    let wait_time = Duration::from_millis(wait_time);
+
 
     for msg in channel {
         qid += 1;
@@ -65,9 +73,11 @@ fn run_dns_query_tx(
                 let query_bytes = q.to_vec().expect("Failed to serialize the query to bytes.");
 
                 // Send the query to the resolver
-                socket.send_to(&query_bytes, resolver_addr)
-        .expect("Failed to send DNS query");
-                eprintln!("{}", line);
+                socket.send_to(&query_bytes, resolver_addr).expect("Failed to send DNS query");
+
+                if rate_limit > 0 {
+                    thread::sleep(wait_time);
+                };
             }
             Message::Terminate => {
                 break;
@@ -118,6 +128,7 @@ fn main() {
     let ns_port = args.port;
     let timeout = args.timeout;
     let bind = format!("{}:0", args.bind);
+    let rate_limit = args.ratelimit;
 
     let (tx, rx) = mpsc::channel();
     // let (q_tx, q_rx) = mpsc::channel();
@@ -135,7 +146,7 @@ fn main() {
 
     let thread_dns_query_tx= thread::spawn(move || {
         // run_dns_query_tx(rx, socket_tx, q_tx);
-        run_dns_query_tx(rx, socket_tx, &ns, ns_port);
+        run_dns_query_tx(rx, socket_tx, &ns, ns_port, rate_limit);
     });
 
     let thread_dns_query_rx = thread::spawn(move || {

@@ -16,4 +16,7 @@ pub struct ArgParse {
 
     #[arg(short, long, required=false, default_value="0.0.0.0")]
     pub bind: String,
+
+    #[arg(short, long, required=false, default_value="0")]
+    pub ratelimit: u64,
 }
