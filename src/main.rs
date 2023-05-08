@@ -3,17 +3,9 @@ use std::net::UdpSocket;
 use std::sync::mpsc;
 use std::thread;
 
-use dns::{parse_query, response_to_csv};
-use trust_dns_proto::serialize::binary::BinEncodable;
+pub mod dns;
 
-use crate::dns::build_query;
-
-// use trust_dns_proto::op::{Message, MessageType, OpCode, Query};
-// use trust_dns_proto::rr::domain::Name;
-// use trust_dns_proto::rr::record_type::RecordType;
-
-mod dns;
-
+// use crate::dns;
 
 enum Message {
     Input(String),
@@ -64,7 +56,7 @@ fn run_dns_query_tx(
             Message::Input(line) => {
 
                 // println!("Build query with QID: {}", qid);
-                let q = build_query(qid, &line).expect("Failed to build a query.");
+                let q = dns::build_query(qid, &line).expect("Failed to build a query.");
                 let query_bytes = q.to_vec().expect("Failed to serialize the query to bytes.");
 
                 // Send the query to the resolver
@@ -93,8 +85,8 @@ fn run_dns_query_rx(
                 // Process the received DNS query
                 let response_data = &buffer[..received];
 
-                let r = parse_query(response_data).expect("Failed to parse a DNS response.");
-                response_to_csv(r);
+                let r = dns::parse_query(response_data).expect("Failed to parse a DNS response.");
+                dns::response_to_csv(r);
 
                 // for r
                 // println!("Parsed query from {}: {:?}", src_addr, r);

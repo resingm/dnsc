@@ -1,6 +1,7 @@
 
 use trust_dns_proto::{error, op, rr};
 
+
 pub fn build_query(qid: u16, domain_name: &str) -> error::ProtoResult<op::Message> {
     let mut q = op::Message::new();
 
