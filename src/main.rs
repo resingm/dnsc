@@ -155,6 +155,10 @@ fn main() {
     });
 
     thread_input_reader.join().expect("Failed to terminate input reader.");
-    thread_dns_query_tx.join().expect("Failed to terminate DNS query sender.");
+    
+    match thread_dns_query_tx.join() {
+        Ok(_) => (),
+        Err(e) => eprintln!("Failed to terminate DNS query sender: {:?}", e),
+    };
     thread_dns_query_rx.join().expect("Failed to terminate DNS query receiver.");
 }

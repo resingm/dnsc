@@ -71,9 +71,10 @@ pub fn response_to_csv(src_addr: SocketAddr, r: op::Message) {
     if r.response_code() == op::ResponseCode::NoError {
         for answer in r.answers() {
             println!(
-                "{},{},{},{},{},{},{}",
+                "{},{},{},{},{},{},{},{}",
                 src_addr.ip().to_string(),
                 src_addr.port().to_string(),
+                r.response_code().to_str(),
                 answer.name(),
                 answer.rr_type(),
                 answer.dns_class(),
@@ -81,8 +82,18 @@ pub fn response_to_csv(src_addr: SocketAddr, r: op::Message) {
                 answer.data().unwrap(),
             );
         }
-
     } else {
+        println!(
+            "{},{},{},{},{},{},{},{}",
+            src_addr.ip().to_string(),
+            src_addr.port().to_string(),
+            r.response_code().to_str(),
+            "",
+            "",
+            "",
+            "",
+            "",
+        );
         eprintln!("DNS Response error: {:?} - {:?}", r.response_code(), r);
     }
 }
