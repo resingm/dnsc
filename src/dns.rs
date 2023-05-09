@@ -68,13 +68,23 @@ pub fn parse_query(buf: &[u8]) -> error::ProtoResult<op::Message> {
 // }
 
 pub fn response_to_csv(src_addr: SocketAddr, r: op::Message) {
+    let (q_name, q_type, q_class) = if r.query_count() > 0 {
+        let q = r.query().into_iter().next().unwrap();
+        (q.name().to_string(), q.query_type().to_string(), q.query_class().to_string())
+    } else {
+        (String::from(""), String::from(""), String::from(""))
+    };
+
     if r.response_code() == op::ResponseCode::NoError {
         for answer in r.answers() {
             println!(
-                "{},{},{},{},{},{},{},{}",
+                "{},{},{},{},{},{},{},{},{},{},{}",
                 src_addr.ip().to_string(),
                 src_addr.port().to_string(),
-                r.response_code().to_str(),
+                q_name,
+                q_type,
+                q_class,
+                r.response_code().to_string(),
                 answer.name(),
                 answer.rr_type(),
                 answer.dns_class(),
@@ -84,10 +94,13 @@ pub fn response_to_csv(src_addr: SocketAddr, r: op::Message) {
         }
     } else {
         println!(
-            "{},{},{},{},{},{},{},{}",
+            "{},{},{},{},{},{},{},{},{},{},{}",
             src_addr.ip().to_string(),
             src_addr.port().to_string(),
-            r.response_code().to_str(),
+            q_name,
+            q_type,
+            q_class,
+            r.response_code().to_string(),
             "",
             "",
             "",

@@ -36,8 +36,6 @@ fn read_input(channel: mpsc::Sender<Message>) {
             channel.send(Message::Input(String::from(line))).expect("Failed to queue input to the channel.")
         }
     }
-
-    channel.send(Message::Terminate).expect("Failed to queue `TERMINATE` message.");
 }
 
 
@@ -129,6 +127,7 @@ fn main() {
     let timeout = args.timeout;
     let bind = format!("{}:0", args.bind);
     let rate_limit = args.ratelimit;
+    let with_header = args.no_header;
 
     let (tx, rx) = mpsc::channel();
     // let (q_tx, q_rx) = mpsc::channel();
@@ -138,10 +137,15 @@ fn main() {
     let socket_tx = socket.try_clone().expect("Failed to clone UDP socket for lookup thread.");
     let socket_rx = socket.try_clone().expect("Failed to clone UDP socket for listener thread.");
 
-    // Spawn the DNS query consumer
+    // Print the CSV header
+    if with_header {
+        cli::print_csv_header();
+    }
 
+    // Spawn the DNS query consumer
+    let tx_input_reader = tx.clone();
     let thread_input_reader= thread::spawn(move || {
-        read_input(tx);
+        read_input(tx_input_reader);
     });
 
     let thread_dns_query_tx= thread::spawn(move || {
@@ -154,11 +158,23 @@ fn main() {
         run_dns_query_rx(socket_rx, timeout);
     });
 
-    thread_input_reader.join().expect("Failed to terminate input reader.");
-    
+    match thread_input_reader.join() {
+        Ok(_) => (),
+        Err(e) => eprintln!("Failed to terminate input reader: {:?}", e),
+    };
+
+    match thread_dns_query_rx.join() {
+        Ok(_) => (),
+        Err(e) => eprintln!("Failed to terminate DNS query receiver: {:?}", e)
+    };
+
+    match tx.send(Message::Terminate) {
+        Ok(_) => (),
+        Err(e) => eprintln!("Failed to send the termination message to the DNS query sender: {:?}", e),
+    };
+
     match thread_dns_query_tx.join() {
         Ok(_) => (),
         Err(e) => eprintln!("Failed to terminate DNS query sender: {:?}", e),
     };
-    thread_dns_query_rx.join().expect("Failed to terminate DNS query receiver.");
 }
