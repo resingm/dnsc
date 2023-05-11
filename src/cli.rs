@@ -1,4 +1,7 @@
+use std::str::FromStr;
+
 use clap::{ArgAction, Parser};
+use trust_dns_proto::{error::ProtoResult, rr::record_type};
 
 #[derive(Parser)]
 #[command(name = "dnsc")]
@@ -10,6 +13,9 @@ pub struct ArgParse {
 
     #[arg(short, long, required=false, default_value="53", help="Port of the recursive resolver")]
     pub port: u16,
+
+    #[arg(short, long, required=false, default_value="A", help="Set a custom query type")]
+    pub qtype: String,
 
     #[arg(short, long, required=false, default_value="3", help="Timeout to wait for responses before shutting down the listener")]
     pub timeout: u64,
@@ -24,19 +30,6 @@ pub struct ArgParse {
     pub no_header: bool,
 }
 
-pub fn print_csv_header() {
-    println!(
-        "{},{},{},{},{},{},{},{},{},{},{}",
-        "resolver",
-        "port",
-        "qname",
-        "qtype",
-        "qclass",
-        "rc",
-        "rname",
-        "rr",
-        "rclass",
-        "ttl",
-        "rdata",
-    )
+pub fn parse_record_type(qtype: &str) -> ProtoResult<record_type::RecordType> {
+    record_type::RecordType::from_str(qtype)
 }

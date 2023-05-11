@@ -5,9 +5,11 @@ use std::thread;
 use std::time::Duration;
 
 use clap::Parser;
+use trust_dns_proto::rr::record_type;
 
-pub mod cli;
-pub mod dns;
+mod cli;
+mod dns;
+mod util;
 
 
 enum Message {
@@ -46,6 +48,7 @@ fn run_dns_query_tx(
     nameserver: &str,
     nameserver_port: u16,
     rate_limit: u64,
+    q_type: record_type::RecordType,
     // q_channel: mpsc::Sender<u16>,
 ) {
     let resolver_addr = (nameserver, nameserver_port);
@@ -65,9 +68,7 @@ fn run_dns_query_tx(
 
         match msg {
             Message::Input(line) => {
-
-                // println!("Build query with QID: {}", qid);
-                let q = dns::build_query(qid, &line).expect("Failed to build a query.");
+                let q = dns::build_query(qid, &line, q_type.clone()).expect("Failed to build a query.");
                 let query_bytes = q.to_vec().expect("Failed to serialize the query to bytes.");
 
                 // Send the query to the resolver
@@ -110,7 +111,7 @@ fn run_dns_query_rx(
             }
             Err(err) => {
                 // Handle the receive error
-                eprintln!("Receive error: {:?}", err);
+                util::err(&format!("Receive error: {:?}", err));
                 break;
             }
         }
@@ -128,6 +129,9 @@ fn main() {
     let bind = format!("{}:0", args.bind);
     let rate_limit = args.ratelimit;
     let with_header = args.no_header;
+    let q_type = args.qtype;
+    let q_type = cli::parse_record_type(&q_type).expect("Failed to parse query type.");
+
 
     let (tx, rx) = mpsc::channel();
     // let (q_tx, q_rx) = mpsc::channel();
@@ -139,7 +143,10 @@ fn main() {
 
     // Print the CSV header
     if with_header {
-        cli::print_csv_header();
+        util::log(&format!(
+            "{},{},{},{},{},{},{},{},{},{},{}",
+            "resolver", "port", "qname", "qtype", "qclass", "rcode", "rname", "rtype", "rclass", "ttl", "rdata",
+        ));
     }
 
     // Spawn the DNS query consumer
@@ -150,7 +157,7 @@ fn main() {
 
     let thread_dns_query_tx= thread::spawn(move || {
         // run_dns_query_tx(rx, socket_tx, q_tx);
-        run_dns_query_tx(rx, socket_tx, &ns, ns_port, rate_limit);
+        run_dns_query_tx(rx, socket_tx, &ns, ns_port, rate_limit, q_type);
     });
 
     let thread_dns_query_rx = thread::spawn(move || {
@@ -160,21 +167,21 @@ fn main() {
 
     match thread_input_reader.join() {
         Ok(_) => (),
-        Err(e) => eprintln!("Failed to terminate input reader: {:?}", e),
+        Err(e) => util::err(&format!("Failed to terminate input reader: {:?}", e)),
     };
 
     match thread_dns_query_rx.join() {
         Ok(_) => (),
-        Err(e) => eprintln!("Failed to terminate DNS query receiver: {:?}", e)
+        Err(e) => util::err(&format!("Failed to terminate DNS query receiver: {:?}", e))
     };
 
     match tx.send(Message::Terminate) {
         Ok(_) => (),
-        Err(e) => eprintln!("Failed to send the termination message to the DNS query sender: {:?}", e),
+        Err(e) => util::err(&format!("Failed to send the termination message to the DNS query sender: {:?}", e)),
     };
 
     match thread_dns_query_tx.join() {
         Ok(_) => (),
-        Err(e) => eprintln!("Failed to terminate DNS query sender: {:?}", e),
+        Err(e) => util::err(&format!("Failed to terminate DNS query sender: {:?}", e)),
     };
 }

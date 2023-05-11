@@ -3,8 +3,10 @@ use std::net::SocketAddr;
 
 use trust_dns_proto::{error, op, rr};
 
+use crate::util;
 
-pub fn build_query(qid: u16, domain_name: &str) -> error::ProtoResult<op::Message> {
+/// TODO: Add documentation
+pub fn build_query(qid: u16, domain_name: &str, query_type: rr::record_type::RecordType) -> error::ProtoResult<op::Message> {
     let mut q = op::Message::new();
 
     q.set_id(qid);
@@ -16,7 +18,7 @@ pub fn build_query(qid: u16, domain_name: &str) -> error::ProtoResult<op::Messag
     let domain_name = rr::domain::Name::from_ascii(domain_name)?;
     let query_record = op::Query::query(
         domain_name,
-        rr::record_type::RecordType::A,
+        query_type,
     );
 
     q.add_query(query_record);
@@ -24,7 +26,35 @@ pub fn build_query(qid: u16, domain_name: &str) -> error::ProtoResult<op::Messag
     Ok(q)
 }
 
+/// TODO: Add documentation
+pub fn map_return_code(rcode: &op::ResponseCode) -> &str {
+    match rcode {
+        op::ResponseCode::NoError => "NOERROR",     //  0
+        op::ResponseCode::FormErr => "FORMERR",     //  1 Format Error    
+        op::ResponseCode::ServFail => "SERVFAIL",   //  2 Server Failure
+        op::ResponseCode::NXDomain => "NXDomain",   //  3 Non-Existant domain
+        op::ResponseCode::NotImp => "NOTIMP",       //  4 Not implenmented
+        op::ResponseCode::Refused => "REFUSED",     //  5 Query refused
+        op::ResponseCode::YXDomain => "YXDOMAIN",   //  6 Name that should not exist, does exist
+        op::ResponseCode::YXRRSet => "YXRRSET",     //  7 RR set that should not exist, does exist
+        op::ResponseCode::NXRRSet => "NXRRSET",     //  8 RR set does not exist, but should
+        op::ResponseCode::NotAuth => "NOTAUTH",     //  9 Server not authorized for the zone
+        op::ResponseCode::NotZone => "NOTZONE",     // 10 Name not in zone
+        // 11 - 15 is unassigned
+        op::ResponseCode::BADVERS => "BADVERS",     // 16
+        op::ResponseCode::BADSIG => "BADSIG",       // 16
+        op::ResponseCode::BADKEY => "BADKEY",       // 17
+        op::ResponseCode::BADTIME => "BADTIME",     // 18
+        op::ResponseCode::BADMODE => "BADMODE",     // 19
+        op::ResponseCode::BADNAME => "BADNAME",     // 20
+        op::ResponseCode::BADALG => "BADALG",       // 21
+        op::ResponseCode::BADTRUNC => "BADTRUNC",   // 22
+        op::ResponseCode::BADCOOKIE => "BADCOOKIE", // 23
+        op::ResponseCode::Unknown(_) => "UNKNOWN",  // 
+    }
+}
 
+// Add documentation
 pub fn parse_query(buf: &[u8]) -> error::ProtoResult<op::Message> {
     let r = op::Message::from_vec(buf)?;
     Ok(r)
@@ -67,6 +97,7 @@ pub fn parse_query(buf: &[u8]) -> error::ProtoResult<op::Message> {
     // edns: None
 // }
 
+/// TODO: Add documentation
 pub fn response_to_csv(src_addr: SocketAddr, r: op::Message) {
     let (q_name, q_type, q_class) = if r.query_count() > 0 {
         let q = r.query().into_iter().next().unwrap();
@@ -77,23 +108,23 @@ pub fn response_to_csv(src_addr: SocketAddr, r: op::Message) {
 
     if r.response_code() == op::ResponseCode::NoError {
         for answer in r.answers() {
-            println!(
+            util::log(&format!(
                 "{},{},{},{},{},{},{},{},{},{},{}",
                 src_addr.ip().to_string(),
                 src_addr.port().to_string(),
                 q_name,
                 q_type,
                 q_class,
-                r.response_code().to_string(),
+                map_return_code(&r.response_code()),
                 answer.name(),
                 answer.rr_type(),
                 answer.dns_class(),
                 answer.ttl(),
                 answer.data().unwrap(),
-            );
+            ));
         }
     } else {
-        println!(
+        util::log(&format!(
             "{},{},{},{},{},{},{},{},{},{},{}",
             src_addr.ip().to_string(),
             src_addr.port().to_string(),
@@ -106,7 +137,8 @@ pub fn response_to_csv(src_addr: SocketAddr, r: op::Message) {
             "",
             "",
             "",
-        );
-        eprintln!("DNS Response error: {:?} - {:?}", r.response_code(), r);
+        ));
+
+        util::err(&format!("DNS Response error: {:?} - {:?}", r.response_code(), r));
     }
 }
